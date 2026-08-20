@@ -129,7 +129,14 @@ def main():
     if not (DIR / ".git").exists():
         log("AVISO: no hay repo git aqui todavia -> no se publica (solo local)")
         return 0
-    git("add", "data/theta_dial_data.json", "index.html")
+    # `-u` (--update) versiona TODO fichero YA RASTREADO que haya cambiado, y
+    # solo esos: nunca arrastra ficheros nuevos ni basura suelta. Antes esto era
+    # una lista fija de dos rutas, y una edicion al propio update_dashboard.py
+    # se quedaba fuera del repo en silencio -- la publicacion dejaba de ser
+    # reproducible: el JSON de GitHub ya no salia del codigo de GitHub.
+    # Lo cazo la verificacion end-to-end del 2026-08-20.
+    git("add", "-u")
+    git("add", "data/theta_dial_data.json")   # por si aun no estuviera rastreado
     st = git("status", "--porcelain")
     if not st.stdout.strip():
         log("nada que commitear")

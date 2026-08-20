@@ -175,7 +175,15 @@ def build():
             "nativo": ("Se calcula con theta_k2/spot del propio QQQ. "
                        "Ning%sn dato de SPX interviene." % U),
         },
-        "latest": (dict(ult, edad_dias=edad) if ult else None),
+        # `latest` lleva DOS juegos de claves a proposito:
+        #   d/p/e/q/raw  -> las que consume esta pagina
+        #   date/pct/zone-> el CONTRATO de zoneFeed del portal MANUMB_HOME
+        #                   (static/index.html, loadZoneBadges: lee latest.zone,
+        #                   latest.date y latest.pct, y si `zone` no esta en su
+        #                   ZONE_COLORS no pinta nada, en silencio).
+        # Duplicar tres escalares es mas barato que mantener dos formatos.
+        "latest": (dict(ult, edad_dias=edad,
+                        date=ult["d"], pct=ult["p"], zone=ult["e"]) if ult else None),
         "series": series,
         "deciles": est_full.get("deciles", []),
         "estados": est_full.get("estados", []),
