@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>THETA_DIAL — QQQ Batman LT | manumb-research</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%230e1116'/><text x='50' y='70' font-size='62' text-anchor='middle' fill='%23c4b5fd' font-family='monospace' font-weight='bold'>&#920;</text></svg>">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{
+  --bg:#0b0e13; --surf:#11151c; --surf2:#171c25; --line:#232a36;
+  --ink:#e8e6e1; --ink2:#9aa3b2; --ink3:#5f6877;
+  --violet:#c4b5fd; --violet-soft:rgba(196,181,253,.14);
+  --green:#2bd48a; --red:#ff7369; --amber:#eda100;
+  --mono:'Cascadia Code','Consolas',monospace;
+  --sans:-apple-system,'Segoe UI',Roboto,'Inter',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55}
+a{color:var(--violet);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1240px;margin:0 auto;padding:0 22px}
+
+header{border-bottom:1px solid var(--line);background:linear-gradient(180deg,#141024 0%,var(--bg) 100%)}
+.hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;padding:26px 0 18px}
+.hd h1{font-family:var(--mono);font-size:26px;letter-spacing:.5px}
+.hd h1 b{color:var(--violet)}
+.hd .sub{color:var(--ink2);font-size:14px}
+.hd .meta{margin-left:auto;color:var(--ink3);font-size:12.5px;font-family:var(--mono);text-align:right}
+.badge{display:inline-block;padding:2px 9px;border:1px solid var(--line);border-radius:20px;color:var(--ink2);font-size:12px;margin-left:6px}
+
+/* ---- estado de hoy ---- */
+.today{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:22px;align-items:start;margin:26px 0 6px}
+@media(max-width:820px){.today{grid-template-columns:1fr}}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.dial-n{font-family:var(--mono);font-size:52px;font-weight:700;line-height:1}
+.dial-lbl{color:var(--ink3);font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em}
+.st{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;padding:4px 13px;border-radius:20px;letter-spacing:.5px;margin-top:10px}
+.st.ALTO{background:rgba(43,212,138,.14);border:1px solid rgba(43,212,138,.45);color:var(--green)}
+.st.MEDIO{background:rgba(237,161,0,.13);border:1px solid rgba(237,161,0,.45);color:var(--amber)}
+.st.BAJO{background:rgba(255,115,105,.13);border:1px solid rgba(255,115,105,.45);color:var(--red)}
+.st.SINDATO{background:var(--surf2);border:1px solid var(--line);color:var(--ink3)}
+.age{font-family:var(--mono);font-size:12px;color:var(--ink3);margin-top:9px}
+.age.warn{color:var(--amber)}
+.scale{margin-top:16px}
+.scale-bar{position:relative;height:9px;border-radius:6px;overflow:hidden;
+  background:linear-gradient(90deg,var(--red) 0%,var(--red) 12.3%,var(--amber) 12.3%,var(--amber) 38.8%,var(--green) 38.8%,var(--green) 100%);opacity:.45}
+.scale-mk{position:absolute;top:-4px;width:3px;height:17px;background:var(--ink);border-radius:2px}
+.scale-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--ink3);margin-top:5px}
+
+h2{font-family:var(--mono);font-size:17px;margin:34px 0 4px}
+h2 span{color:var(--violet)}
+.h2sub{color:var(--ink3);font-size:12.5px;margin-bottom:12px}
+
+.pills{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:14px 0 10px}
+.pill{font-family:var(--mono);font-size:13px;padding:7px 13px;border:1px solid var(--line);
+  border-radius:8px;background:var(--surf);color:var(--ink2);cursor:pointer;transition:all .15s}
+.pill:hover{border-color:var(--violet);color:var(--ink)}
+.pill.on{background:var(--violet-soft);border-color:var(--violet);color:var(--violet);font-weight:600}
+
+#chart{width:100%;height:430px;background:var(--surf);border:1px solid var(--line);border-radius:12px}
+
+.tw{overflow-x:auto;background:var(--surf);border:1px solid var(--line);border-radius:12px;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:var(--surf2)}
+td:first-child,th:first-child{text-align:left}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surf2)}
+.g{color:var(--green)} .r{color:var(--red)} .a{color:var(--amber)} .m{color:var(--ink3)}
+
+.warns{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:12px 0 6px}
+.warn-c{background:var(--surf);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:10px;padding:14px 16px}
+.warn-c h3{font-family:var(--mono);font-size:13.5px;color:var(--amber);margin-bottom:6px}
+.warn-c p{font-size:13px;color:var(--ink2);line-height:1.5}
+
+footer{border-top:1px solid var(--line);margin-top:44px;padding:20px 0 44px;color:var(--ink3);font-size:12px;line-height:1.7}
+footer code{background:var(--surf);padding:1px 5px;border-radius:4px;color:var(--violet);font-size:11.5px}
+</style>
+</head>
+<body>
+
+<header><div class="wrap"><div class="hd">
+  <h1>THETA_<b>DIAL</b></h1>
+  <span class="sub">Régimen diario · QQQ Batman LT<span class="badge" id="bd-nativo">nativo de QQQ</span></span>
+  <div class="meta" id="hd-meta">cargando…</div>
+</div></div></header>
+
+<div class="wrap">
+
+  <div class="today">
+    <div class="card">
+      <div class="dial-lbl">percentil de hoy</div>
+      <div class="dial-n" id="t-pct">—</div>
+      <div id="t-st" class="st SINDATO">SIN DATO</div>
+      <div class="age" id="t-age"></div>
+      <div class="scale">
+        <div class="scale-bar"><div class="scale-mk" id="t-mk" style="left:0%"></div></div>
+        <div class="scale-lbl"><span>0 · BAJO</span><span id="t-c1">12,3</span><span id="t-c2">38,8</span><span>100 · ALTO</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="dial-lbl">qué es</div>
+      <p style="margin:8px 0 12px;font-size:14px;color:var(--ink2)">
+        Media de medias por celda (DTE1 × DTE2) de <code style="color:var(--violet)">theta_k2 / spot</code>,
+        expresada como <b>percentil expandido solo-pasado</b> contra su propia historia.
+        Describe el <b>día</b>, no el candidato: todos los trades de una jornada comparten valor.
+      </p>
+      <p style="font-size:13px;color:var(--ink3)">
+        Se estratifica por celda a propósito: <code style="color:var(--violet)">theta_k2/spot</code> correlaciona
+        +0,56 con DTE2, así que la media simple dependería de la mezcla de vencimientos
+        y no sería reproducible en vivo.
+      </p>
+      <div id="ctx" style="margin-top:14px;font-family:var(--mono);font-size:12.5px;color:var(--ink3)"></div>
+    </div>
+  </div>
+
+  <h2><span>##</span> Serie</h2>
+  <div class="h2sub">Percentil del dial con las bandas de estado. El precio de QQQ va de contexto, en el eje derecho.</div>
+  <div class="pills" id="pills"></div>
+  <div id="chart"></div>
+
+  <h2><span>##</span> Monotonía por decil</h2>
+  <div class="h2sub" id="mono-sub"></div>
+  <div class="tw"><table id="t-dec"></table></div>
+
+  <h2><span>##</span> Por estado y por corte</h2>
+  <div class="h2sub">Todo a nivel <b>trade</b>: el dial solo elige los días. Promediar dentro del día hincharía el PF artificialmente.</div>
+  <div class="tw"><table id="t-est"></table></div>
+  <div class="tw"><table id="t-cor"></table></div>
+
+  <h2><span>##</span> Cobertura por año</h2>
+  <div class="h2sub">Cuántos días de cada año tienen dial, y cómo se reparten los estados. Los 250 primeros días del histórico no tienen suficiente pasado para el percentil.</div>
+  <div class="tw"><table id="t-cob"></table></div>
+
+  <h2><span>##</span> Cómo leerlo</h2>
+  <div class="h2sub">Lo que los datos sostienen, y lo que no.</div>
+  <div class="warns" id="warns"></div>
+
+  <footer>
+    <div id="ft"></div>
+  </footer>
+</div>
+
+<script>
+const F = (x,n=2)=> (x===null||x===undefined||!isFinite(x)) ? "—" : Number(x).toLocaleString("es-ES",{minimumFractionDigits:n,maximumFractionDigits:n});
+const I = x => (x===null||x===undefined) ? "—" : Number(x).toLocaleString("es-ES");
+const PF = x => x===null||x===undefined ? "∞" : F(x,2);
+let D=null, VENTANA="all";
+
+function tabla(el, cols, filas){
+  const th = cols.map(c=>`<th>${c.t}</th>`).join("");
+  const tb = filas.map(f=>"<tr>"+cols.map(c=>{
+    const v = c.f ? c.f(f) : f[c.k];
+    return `<td class="${c.cls?c.cls(f):''}">${v===undefined||v===null?"—":v}</td>`;
+  }).join("")+"</tr>").join("");
+  document.getElementById(el).innerHTML = `<thead><tr>${th}</tr></thead><tbody>${tb}</tbody>`;
+}
+
+function pintarHoy(){
+  const L=D.latest, m=D.meta;
+  document.getElementById("t-c1").textContent = F(m.corte_bajo,1);
+  document.getElementById("t-c2").textContent = F(m.corte_alto,1);
+  if(!L){ return; }
+  document.getElementById("t-pct").textContent = F(L.p,1);
+  const st=document.getElementById("t-st"); st.className="st "+L.e; st.textContent=L.e;
+  document.getElementById("t-mk").style.left = Math.max(0,Math.min(99,L.p))+"%";
+  const a=document.getElementById("t-age");
+  a.textContent = `último dato: ${L.d}  ·  hace ${L.edad_dias} día${L.edad_dias===1?"":"s"}`;
+  if(L.edad_dias>3) a.classList.add("warn");
+  const c=D.contexto||{};
+  document.getElementById("ctx").innerHTML =
+    `r_día(dial, PnL) = <b style="color:var(--green)">${F(c.r_day_dial_vs_PnL,3)}</b>` +
+    `　·　r(dial, VIX) = <b style="color:var(--amber)">${F(c.r_dial_vs_VIX,3)}</b>` +
+    `　·　${I(c.Ndias)} días`;
+}
+
+function pintarGrafico(){
+  const s=D.series.filter(x=>x.p!==null);
+  let dat=s;
+  if(VENTANA!=="all"){
+    const n = VENTANA==="1y"?252 : VENTANA==="3y"?756 : 1260;
+    dat = s.slice(-n);
+  }
+  const x=dat.map(r=>r.d);
+  const trazas=[
+    {x, y:dat.map(r=>r.p), type:"scatter", mode:"lines", name:"THETA_DIAL (percentil)",
+     line:{color:"#c4b5fd",width:1.8}, hovertemplate:"%{x}<br>dial %{y:.1f}<extra></extra>"},
+  ];
+  if(dat.some(r=>r.q!==null)){
+    trazas.push({x, y:dat.map(r=>r.q), type:"scatter", mode:"lines", name:"QQQ (contexto)",
+      yaxis:"y2", line:{color:"#5f6877",width:1,dash:"dot"},
+      hovertemplate:"%{x}<br>QQQ %{y:.2f}<extra></extra>"});
+  }
+  const B=D.meta.corte_bajo, A=D.meta.corte_alto;
+  Plotly.newPlot("chart", trazas, {
+    paper_bgcolor:"#11151c", plot_bgcolor:"#11151c",
+    font:{color:"#9aa3b2",family:"Cascadia Code,Consolas,monospace",size:11},
+    margin:{l:48,r:56,t:18,b:38}, hovermode:"x unified", showlegend:true,
+    legend:{orientation:"h",y:1.14,x:0,font:{size:11}},
+    xaxis:{gridcolor:"#232a36",zeroline:false},
+    yaxis:{title:"percentil",range:[0,100],gridcolor:"#232a36",zeroline:false},
+    yaxis2:{title:"QQQ",overlaying:"y",side:"right",showgrid:false,zeroline:false},
+    shapes:[
+      {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:0,y1:B,fillcolor:"rgba(255,115,105,.09)",line:{width:0},layer:"below"},
+      {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:B,y1:A,fillcolor:"rgba(237,161,0,.07)",line:{width:0},layer:"below"},
+      {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:A,y1:100,fillcolor:"rgba(43,212,138,.08)",line:{width:0},layer:"below"}
+    ]
+  }, {displayModeBar:false,responsive:true});
+}
+
+function pintarTablas(){
+  tabla("t-dec",[
+    {t:"decil",k:"corte"},{t:"N",f:f=>I(f.N)},{t:"días",f:f=>I(f.Ndias)},
+    {t:"mediana",f:f=>F(f.mediana),cls:f=>f.mediana>0?"g":"r"},
+    {t:"acierto",f:f=>F(f.WR,1)+"%"},
+    {t:"PF",f:f=>PF(f.PF),cls:f=>f.PF===null||f.PF>=2?"g":(f.PF<1.3?"r":"a")},
+    {t:"CVaR5",f:f=>F(f.CVaR5),cls:()=>"r"}
+  ], D.deciles);
+  const mo=D.monotonia||{};
+  document.getElementById("mono-sub").innerHTML =
+    `Kendall tau de la mediana <b>${F(mo.tau_mediana,3)}</b> · del PF <b>${F(mo.tau_PF,3)}</b> · ` +
+    `${mo.escalones_que_suben||"—"} escalones suben. ` +
+    `<span style="color:var(--red)">Lo más útil está abajo: D1 y D2 pierden dinero.</span>`;
+
+  const cols=[{t:"",k:"corte"},{t:"N",f:f=>I(f.N)},{t:"días",f:f=>I(f.Ndias)},
+    {t:"mediana",f:f=>F(f.mediana),cls:f=>f.mediana>0?"g":"r"},
+    {t:"acierto",f:f=>F(f.WR,1)+"%"},{t:"PF",f:f=>PF(f.PF)},{t:"CVaR5",f:f=>F(f.CVaR5),cls:()=>"r"}];
+  tabla("t-est",cols,D.estados);
+  tabla("t-cor",cols,D.cortes);
+
+  tabla("t-cob",[
+    {t:"año",k:"anio"},{t:"trades",f:f=>I(f.N)},{t:"días",f:f=>I(f.Ndias)},
+    {t:"con dial",f:f=>f.dias_con_dial+" ("+F(f["cobertura_%"],0)+"%)",
+     cls:f=>f["cobertura_%"]<50?"r":"m"},
+    {t:"BAJO",f:f=>f["BAJO_%"]===null?"—":F(f["BAJO_%"],1)+"%",cls:f=>f["BAJO_%"]>80?"r":""},
+    {t:"MEDIO",f:f=>f["MEDIO_%"]===null?"—":F(f["MEDIO_%"],1)+"%"},
+    {t:"ALTO",f:f=>f["ALTO_%"]===null?"—":F(f["ALTO_%"],1)+"%",cls:f=>f["ALTO_%"]===0?"r":"g"},
+    {t:"dial p50",f:f=>f.dial_p50===null?"—":F(f.dial_p50,1)}
+  ], D.cobertura);
+
+  document.getElementById("warns").innerHTML = D.avisos.map(a=>
+    `<div class="warn-c"><h3>${a.t}</h3><p>${a.d}</p></div>`).join("");
+}
+
+fetch("data/theta_dial_data.json?v="+Date.now()).then(r=>r.json()).then(d=>{
+  D=d;
+  const m=d.meta;
+  document.getElementById("hd-meta").innerHTML =
+    `${I(m.n_dias_con_dial)} de ${I(m.n_dias_serie)} días con dial<br>` +
+    `${m.rango[0]} → ${m.rango[1]}<br>` +
+    `<span style="color:var(--ink3)">generado ${m.generado.slice(0,16).replace("T"," ")}</span>`;
+  const P=["1y","3y","5y","all"], N={"1y":"1 año","3y":"3 años","5y":"5 años","all":"todo"};
+  document.getElementById("pills").innerHTML = P.map(p=>
+    `<div class="pill${p===VENTANA?" on":""}" data-v="${p}">${N[p]}</div>`).join("");
+  document.querySelectorAll(".pill").forEach(el=>el.onclick=()=>{
+    VENTANA=el.dataset.v;
+    document.querySelectorAll(".pill").forEach(e=>e.classList.toggle("on",e.dataset.v===VENTANA));
+    pintarGrafico();
+  });
+  pintarHoy(); pintarGrafico(); pintarTablas();
+  document.getElementById("ft").innerHTML =
+    `<b>Fórmula:</b> ${m.formula}. Bandas DTE1 <code>${m.bandas_dte1.join(", ")}</code> · ` +
+    `DTE2 <code>${m.bandas_dte2.join(", ")}</code> · calentamiento <code>${m.min_hist_dias}</code> días.<br>` +
+    `<b>Fuente:</b> ${m.fuente}. ${m.nativo}<br>` +
+    `Marco de lectura basado en backtest, <b>no</b> una regla certificada de sizing en vivo. ` +
+    `El histórico llega hasta ${m.rango[1]} y se extiende cada día con la entrega del LIVE.`;
+}).catch(e=>{
+  // Abierto con file:// el navegador BLOQUEA fetch() a ficheros de al lado.
+  // No es que falten los datos: es CORS. En GitHub Pages (http) funciona.
+  const local = location.protocol === "file:";
+  document.getElementById("hd-meta").innerHTML = local
+    ? '<span style="color:var(--amber)">vista local sin servidor</span>'
+    : '<span style="color:var(--red)">error cargando data.json</span>';
+  document.querySelector(".wrap").insertAdjacentHTML("afterbegin",
+    '<div class="card" style="border-left:3px solid var(--amber);margin:26px 0">' +
+    '<h3 style="font-family:var(--mono);font-size:14px;color:var(--amber);margin-bottom:8px">' +
+    (local ? 'Falta servirla por HTTP' : 'No se pudo cargar data.json') + '</h3>' +
+    '<p style="font-size:13.5px;color:var(--ink2)">' +
+    (local
+      ? 'Has abierto la pagina con <code>file://</code> y el navegador bloquea la lectura ' +
+        'del JSON de al lado (politica CORS). Los datos estan bien; solo hace falta un ' +
+        'servidor. Desde esta carpeta:<br><br>' +
+        '<code style="color:var(--violet)">python -m http.server 8899</code><br><br>' +
+        'y abrir <code style="color:var(--violet)">http://127.0.0.1:8899/</code>.<br>' +
+        'En GitHub Pages esto no pasa: se sirve por HTTP y carga directo.'
+      : 'Revisa que exista <code>data/theta_dial_data.json</code> y que ' +
+        '<code>update_dashboard.py</code> haya corrido sin error.') +
+    '</p></div>');
+  console.error(e);
+});
+</script>
+</body>
+</html>
