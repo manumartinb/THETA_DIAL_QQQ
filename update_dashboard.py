@@ -108,6 +108,33 @@ AVISOS = [
 ]
 
 
+# Reparto por anio de la cohorte de elite y de su interseccion con el dial alto.
+# Medido sobre MADRE_GEN3_V42_QQQ_LT.csv el 2026-08-20 (brazo RAND_Q*, cortes
+# V7>=P80 y TX_UP_V7_AREA>=P80). Constantes a proposito: no cambian salvo que
+# cambie la madre, y recalcularlas exigiria leer 1,1 GB en cada refresco diario.
+CONCENTRACION = {
+    "por_anio": [
+        {"anio": "2019", "cuota_elite": 0.9, "cuota_dial": 0.0},
+        {"anio": "2020", "cuota_elite": 46.3, "cuota_dial": 83.2},
+        {"anio": "2021", "cuota_elite": 14.7, "cuota_dial": 15.5},
+        {"anio": "2022", "cuota_elite": 13.0, "cuota_dial": 0.0},
+        {"anio": "2023", "cuota_elite": 14.4, "cuota_dial": 0.0},
+        {"anio": "2024", "cuota_elite": 0.4, "cuota_dial": 0.3},
+        {"anio": "2025", "cuota_elite": 8.0, "cuota_dial": 0.8},
+        {"anio": "2026", "cuota_elite": 2.3, "cuota_dial": 0.2},
+    ],
+    "nota": ("De qu%s a%sos est%s hecha la cohorte que produce esos profit "
+             "factors. La %slite ya carga hacia 2020 (46,3%%), pero al cruzarla "
+             "con el dial alto la concentraci%sn se dispara: <b>83,2%% es 2020 "
+             "y 15,5%% es 2021</b> &mdash; entre los dos, el 98,7%%. En "
+             "<b>2022 y 2023 no hay ni una sola operaci%sn</b>. Y la %slite, "
+             "por su cuenta, <b>pierde dinero</b> en 2021 (mediana %s1,48) y "
+             "2022 (%s1,15). Por eso el aviso de arriba dice que ese PF "
+             "describe un episodio y no una regla anual."
+             % (E, N_, A, E, O, O, E, MENOS, MENOS)),
+}
+
+
 def build():
     meta_ref = json.loads(REF.read_text(encoding="utf-8"))
     cortes = meta_ref["cortes_estado"]
@@ -191,6 +218,14 @@ def build():
         "cobertura": est_full.get("cobertura_anual", []),
         "anio_estado": est_full.get("anio_x_estado", []),
         "elite": est_full.get("elite", []),
+        # De que anos esta hecha la cohorte de elite. Sale de la
+        # @AuditoriaLogica del 2026-08-20: el aviso 3 decia en prosa que el PF
+        # de 2.108 es 98% de 2020, pero no habia forma de VERLO. Las cifras se
+        # midieron sobre la madre en
+        # Batman/QQQ/ANALISIS/RESEARCH_FIGS/_datos_figs.json y se copian aqui
+        # como constantes: recalcularlas en cada refresco obligaria a leer una
+        # madre de 1,1 GB todos los dias para un grafico que no cambia.
+        "concentracion": CONCENTRACION,
         "monotonia": est_full.get("monotonia", {}),
         "contexto": est_full.get("contexto", {}),
         "avisos": AVISOS,

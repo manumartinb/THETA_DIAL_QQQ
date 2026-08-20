@@ -123,16 +123,21 @@ footer code{background:var(--surf);padding:1px 5px;border-radius:4px;color:var(-
 
   <h2><span>##</span> Monotonía por decil</h2>
   <div class="h2sub" id="mono-sub"></div>
+  <div id="g-dec" style="margin-bottom:10px"></div>
   <div class="tw"><table id="t-dec"></table></div>
 
   <h2><span>##</span> Por estado y por corte</h2>
   <div class="h2sub">Todo a nivel <b>trade</b>: el dial solo elige los días. Promediar dentro del día hincharía el PF artificialmente.</div>
   <div class="tw"><table id="t-est"></table></div>
+  <div id="g-cor" style="margin:14px 0 10px"></div>
   <div class="tw"><table id="t-cor"></table></div>
 
-  <h2><span>##</span> Cobertura por año</h2>
+  <h2><span>##</span> Cobertura y concentración</h2>
   <div class="h2sub">Cuántos días de cada año tienen dial, y cómo se reparten los estados. Los 250 primeros días del histórico no tienen suficiente pasado para el percentil.</div>
+  <div id="g-cob" style="margin-bottom:10px"></div>
   <div class="tw"><table id="t-cob"></table></div>
+  <div id="g-con" style="margin-top:26px"></div>
+  <p class="sub" id="con-sub" style="margin-top:6px"></p>
 
   <h2><span>##</span> Cómo leerlo</h2>
   <div class="h2sub">Lo que los datos sostienen, y lo que no.</div>
@@ -210,6 +215,90 @@ function pintarGrafico(){
   }, {displayModeBar:false,responsive:true});
 }
 
+// ---------------------------------------------------------------- graficos
+// Anadidos el 2026-08-20. La pagina tenia solo la serie; las tablas eran
+// exactas pero no se leen de un vistazo, y este dashboard existe para eso.
+const LAY = {                      // el layout comun, para no repetirlo 4 veces
+  paper_bgcolor:"#11151c", plot_bgcolor:"#11151c",
+  font:{color:"#9aa3b2",family:"Cascadia Code,Consolas,monospace",size:11},
+  margin:{l:52,r:52,t:26,b:42}, showlegend:false,
+  xaxis:{gridcolor:"#232a36",zeroline:false},
+  yaxis:{gridcolor:"#232a36",zeroline:false}
+};
+const CFG = {displayModeBar:false,responsive:true};
+const OK="#2bd48a", MAL="#ff7369", AVI="#eda100", LILA="#c4b5fd", GRIS="#5f6877";
+function L(extra){ return Object.assign(JSON.parse(JSON.stringify(LAY)), extra||{}); }
+
+function pintarDeciles(){
+  const d=D.deciles||[]; if(!d.length) return;
+  const x=d.map((_,i)=>"D"+(i+1));
+  // el color ES la lectura: rojo el decil que pierde, no por estetica
+  Plotly.newPlot("g-dec",[
+    {x, y:d.map(r=>r.mediana), type:"bar", name:"mediana",
+     marker:{color:d.map(r=>r.mediana<=1?MAL:OK)},
+     hovertemplate:"%{x}<br>mediana %{y:.2f} pts<extra></extra>"},
+    {x, y:d.map(r=>r.PF), type:"scatter", mode:"lines+markers", name:"PF", yaxis:"y2",
+     line:{color:LILA,width:1.6}, marker:{size:5},
+     hovertemplate:"%{x}<br>PF %{y:.2f}<extra></extra>"}
+  ], L({
+    showlegend:true, legend:{orientation:"h",y:1.16,x:0,font:{size:10.5}},
+    yaxis:{title:"mediana (pts)",gridcolor:"#232a36",zeroline:true,zerolinecolor:"#3a4453"},
+    yaxis2:{title:"PF (log)",overlaying:"y",side:"right",type:"log",showgrid:false},
+    shapes:[{type:"line",xref:"paper",x0:0,x1:1,yref:"y2",y0:1,y1:1,
+             line:{color:MAL,width:1,dash:"dot"}}]
+  }), CFG);
+}
+
+function pintarCortes(){
+  const c=(D.cortes||[]).slice(); if(!c.length) return;
+  const x=c.map(r=>r.corte.replace(/\s+\(pctl.*\)/,"").trim());
+  // dos ejes A PROPOSITO: el coste de este indicador esta en los dias, que es
+  // justo el eje que nadie mira cuando ve un PF de tres cifras.
+  Plotly.newPlot("g-cor",[
+    {x, y:c.map(r=>r.Ndias), type:"bar", name:"dias que quedan",
+     marker:{color:GRIS}, hovertemplate:"%{x}<br>%{y} dias<extra></extra>"},
+    {x, y:c.map(r=>r.PF), type:"scatter", mode:"lines+markers", name:"PF", yaxis:"y2",
+     line:{color:OK,width:1.8}, marker:{size:6},
+     hovertemplate:"%{x}<br>PF %{y:.1f}<extra></extra>"}
+  ], L({
+    showlegend:true, legend:{orientation:"h",y:1.16,x:0,font:{size:10.5}},
+    yaxis:{title:"dias",gridcolor:"#232a36"},
+    yaxis2:{title:"PF (log)",overlaying:"y",side:"right",type:"log",showgrid:false}
+  }), CFG);
+}
+
+function pintarCobertura(){
+  const c=(D.cobertura||[]).filter(r=>r["BAJO_%"]!==null); if(!c.length) return;
+  const x=c.map(r=>r.anio);
+  Plotly.newPlot("g-cob",[
+    {x, y:c.map(r=>r["BAJO_%"]),  type:"bar", name:"BAJO",  marker:{color:MAL}},
+    {x, y:c.map(r=>r["MEDIO_%"]), type:"bar", name:"MEDIO", marker:{color:AVI}},
+    {x, y:c.map(r=>r["ALTO_%"]),  type:"bar", name:"ALTO",  marker:{color:OK}}
+  ], L({
+    barmode:"stack", showlegend:true,
+    legend:{orientation:"h",y:1.16,x:0,font:{size:10.5}},
+    yaxis:{title:"% de los dias del anio",range:[0,100],gridcolor:"#232a36"}
+  }), CFG);
+}
+
+function pintarConcentracion(){
+  const c=D.concentracion;
+  const g=document.getElementById("g-con"), s=document.getElementById("con-sub");
+  if(!c || !c.por_anio || !c.por_anio.length){ if(g) g.style.display="none"; return; }
+  const x=c.por_anio.map(r=>r.anio);
+  Plotly.newPlot("g-con",[
+    {x, y:c.por_anio.map(r=>r.cuota_elite), type:"bar", name:"elite",
+     marker:{color:GRIS}, hovertemplate:"%{x}<br>%{y:.1f}% de la elite<extra></extra>"},
+    {x, y:c.por_anio.map(r=>r.cuota_dial), type:"bar", name:"elite + dial alto",
+     marker:{color:LILA}, hovertemplate:"%{x}<br>%{y:.1f}% de la cohorte<extra></extra>"}
+  ], L({
+    barmode:"group", showlegend:true,
+    legend:{orientation:"h",y:1.16,x:0,font:{size:10.5}},
+    yaxis:{title:"% de la cohorte",gridcolor:"#232a36"}
+  }), CFG);
+  if(s) s.innerHTML = c.nota || "";
+}
+
 function pintarTablas(){
   tabla("t-dec",[
     {t:"decil",k:"corte"},{t:"N",f:f=>I(f.N)},{t:"días",f:f=>I(f.Ndias)},
@@ -259,7 +348,7 @@ fetch("data/theta_dial_data.json?v="+Date.now()).then(r=>r.json()).then(d=>{
     document.querySelectorAll(".pill").forEach(e=>e.classList.toggle("on",e.dataset.v===VENTANA));
     pintarGrafico();
   });
-  pintarHoy(); pintarGrafico(); pintarTablas();
+  pintarHoy(); pintarGrafico(); pintarTablas(); pintarDeciles(); pintarCortes(); pintarCobertura(); pintarConcentracion();
   document.getElementById("ft").innerHTML =
     `<b>Fórmula:</b> ${m.formula}. Bandas DTE1 <code>${m.bandas_dte1.join(", ")}</code> · ` +
     `DTE2 <code>${m.bandas_dte2.join(", ")}</code> · calentamiento <code>${m.min_hist_dias}</code> días.<br>` +
