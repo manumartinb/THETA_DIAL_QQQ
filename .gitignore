@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 *.bak_*
 *.tmp
+
+# Los dias que el dashboard saca de las entregas del LIVE. SI se versionan:
+# son el unico registro del tramo posterior al corte del gate forward, y sin
+# ellos el hueco no se rellena nunca. (No estan en produccion a proposito.)
+!data/dias_live.csv
