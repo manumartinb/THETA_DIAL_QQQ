@@ -4,29 +4,62 @@ THETA_DIAL_QQQ dashboard -- refresco DIARIO. Lo llama el Master Daily.
 
 QUE HACE
 --------
-1. Busca la entrega canonica de QQQ mas reciente.
-2. Si trae un dia que la serie no tiene, lo anade.
-3. Recalcula el percentil expanding SOLO-PASADO de toda la serie.
-4. Reescribe data/theta_dial_data.json (conservando las tablas del estudio).
-5. git add + commit + push a GitHub Pages.
+1. Lee la serie historica del persistidor (SOLO LECTURA).
+2. Busca en las entregas del LIVE los dias que esa serie todavia no tiene.
+3. Descarta los que vengan con POCAS CELDAS (ver mas abajo).
+4. Guarda los aceptados en SU PROPIO fichero, `data/dias_live.csv`.
+5. Publica la union de las dos series: historico del persistidor + dias del LIVE.
+6. git add + commit + push a GitHub Pages.
+
+DOS COSAS QUE ESTE FICHERO HACIA MAL Y SE ARREGLARON EL 2026-08-21
+------------------------------------------------------------------
+
+(1) ESCRIBIA EN UN FICHERO DE PRODUCCION. Appendeaba los dias nuevos DENTRO de
+    `GEN3_THETA_DIAL_SERIE_QQQ.csv`, que es la referencia que el LIVE lee cada
+    dia para rankear el dial. Tres problemas en uno:
+      - un script de una pagina web tenia permiso de escritura sobre una
+        referencia de la que depende el regimen que se opera;
+      - `persist_gen3_theta_dial_symbol.py` reescribe ese fichero ENTERO con
+        `to_csv`, sin leer lo que hay (verificado en su linea 208-210), asi que
+        re-persistir -- cosa normal al ampliar la madre -- BORRABA en silencio
+        todos los dias que este script habia anadido;
+      - y ampliar la referencia del LIVE debe ser una decision del persistidor,
+        no un efecto colateral de refrescar una web.
+    AHORA: la produccion se abre en modo lectura y nunca se toca. Los dias del
+    LIVE viven en `data/dias_live.csv`, que es de este dashboard. Si manana el
+    persistidor extiende el historico, su valor MANDA sobre el del LIVE para
+    ese dia (es el backtesteado, con su filtro forward aplicado).
+
+(2) ACEPTABA CUALQUIER VALOR. El dial es "media de las medias por celda
+    (DTE1 x DTE2)". Estratificar lo hace invariante a CUANTOS candidatos caen
+    en cada celda -- que era el objetivo -- pero NO a QUE celdas estan
+    presentes. El backtest cubre 8 celdas de mediana; si un dia el LIVE
+    entregase pocas, su raw no seria comparable con el historico. Medido sobre
+    los 1.799 dias:
+
+        celdas | error tipico del raw | en puntos de percentil
+             1 |                 9,0% |                   16,5
+             2 |                 5,5% |                    9,5
+             4 |                 3,0% |                    5,4
+             8 |                 1,6% |                    3,0
+
+    La banda BAJO entera mide 12,3 puntos, asi que con 1 celda el dia puede
+    cambiar de estado. Y no se queda en pintarlo mal: entra en la serie y
+    contamina los percentiles de todos los dias siguientes.
+    AHORA: se exige `THETA_DIAL_NCELDAS >= MIN_CELDAS` (4). Por debajo, el dia
+    se descarta y se dice en el log.
 
 POR QUE LEE LA ENTREGA Y NO RECALCULA
 -------------------------------------
-Se probo recalcular el dial desde los parquets del dia (2026-08-19). Sale con un
-1,55% de error, que en percentil son ~5 puntos y hace que el 7,7% de los dias
-cambien de estado. La causa es estructural, no de precision: el dial historico
-se calcula sobre los candidatos que sobrevivieron al filtro FORWARD, y para el
-dia de hoy ese filtro no puede aplicarse porque el futuro no ha pasado.
+Se probo recalcular el dial del dia desde los parquets (2026-08-19): 1,55% de
+error, ~5 puntos de percentil, y el 7,7% de los dias cambiaba de estado. La
+causa es estructural: el dial historico se calcula sobre los candidatos que
+sobrevivieron al filtro FORWARD, y para hoy ese filtro no puede aplicarse. El
+unico numero que coincide con el que ve el usuario en la app es el del LIVE.
 
-El unico numero que coincide con el que ve el usuario en la app es el que emite
-el LIVE. Por eso se lee de su entrega. Coste: un dia de retraso en el punto mas
-nuevo, porque el Master Daily corre antes que el LIVE de las 18:30. Es lo mismo
-que hacen los demas dashboards de la casa ("publica historico al dia aunque hoy
-no haya LIVE").
-
-NUNCA FALLA POR NO HABER ENTREGA NUEVA: si no la hay, republica lo que ya tenia
-y lo deja dicho en `meta.sin_datos_nuevos`. Un dashboard congelado que avisa de
-que esta congelado es correcto; uno que revienta el pipeline, no.
+NUNCA FALLA POR NO HABER ENTREGA NUEVA: republica lo que ya tenia y lo deja
+dicho en `meta.sin_datos_nuevos`. Un dashboard congelado que avisa es correcto;
+uno que revienta el pipeline, no.
 """
 import json
 import subprocess
@@ -34,7 +67,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 DIR = Path(__file__).resolve().parent
@@ -42,11 +74,14 @@ sys.path.insert(0, str(DIR))
 import update_dashboard as full                                   # noqa: E402
 
 GEN3 = Path.home() / "Desktop" / "BATMAN_QQQ_GEN3_V42_BACKTEST_OUTPUT_FILES"
-SERIE = GEN3 / "GEN3_THETA_DIAL_SERIE_QQQ.csv"
+SERIE_PROD = GEN3 / "GEN3_THETA_DIAL_SERIE_QQQ.csv"     # <-- SOLO LECTURA
+DIAS_LIVE = DIR / "data" / "dias_live.csv"              # <-- lo nuestro
 ENTREGAS = (Path.home() / "Desktop" / "BULK OPTIONSTRAT" / "ESTRATEGIAS" / "Batman"
             / "QQQ" / "ANALISIS" / "BATMAN_QQQ_LT_OWN_REACT" / "backend" / "data"
             / "deliveries")
 DATA = DIR / "data" / "theta_dial_data.json"
+
+MIN_CELDAS = 4      # ver el bloque (2) de la cabecera
 
 
 def log(m):
@@ -54,15 +89,15 @@ def log(m):
 
 
 def leer_entregas():
-    """{dia: raw} de todas las entregas que traigan THETA_DIAL_RAW o _PCTL."""
+    """{dia: (raw, n_celdas)} de las entregas que traigan THETA_DIAL_RAW."""
     out = {}
     if not ENTREGAS.exists():
         return out
+    usa = ("dia", "THETA_DIAL_RAW", "THETA_DIAL_PCTL", "THETA_DIAL_NCELDAS")
     for f in sorted(ENTREGAS.glob("Batman_QQQ_Delivery_*.csv")):
         try:
             d = pd.read_csv(f, encoding="utf-8-sig",
-                            usecols=lambda c: c in ("dia", "THETA_DIAL_RAW",
-                                                    "THETA_DIAL_PCTL"))
+                            usecols=lambda c: c in usa)
         except Exception as e:
             log("  AVISO: no se pudo leer %s (%s)" % (f.name, e))
             continue
@@ -76,7 +111,14 @@ def leer_entregas():
             log("  AVISO: %s trae %d valores distintos de THETA_DIAL_RAW; "
                 "se usa el primero" % (f.name, v.nunique()))
         dia = str(d["dia"].dropna().astype(str).str[:10].mode().iloc[0])
-        out[dia] = float(v.iloc[0])
+        # NCELDAS es de alta 2026-08-21: las entregas viejas no lo traen. Se
+        # marca None y se decide abajo (se aceptan por compatibilidad, con aviso).
+        nc = None
+        if "THETA_DIAL_NCELDAS" in d.columns:
+            c = pd.to_numeric(d["THETA_DIAL_NCELDAS"], errors="coerce").dropna()
+            if not c.empty:
+                nc = int(c.iloc[0])
+        out[dia] = (float(v.iloc[0]), nc)
     return out
 
 
@@ -89,30 +131,59 @@ def main():
     log("=" * 62)
     log("THETA_DIAL_QQQ -- refresco diario")
 
-    s = pd.read_csv(SERIE, encoding="utf-8-sig")
-    s["dia"] = s["dia"].astype(str).str[:10]
-    conocidos = set(s["dia"])
-    ult_serie = max(conocidos)
-    log("serie actual: %d dias, hasta %s" % (len(s), ult_serie))
+    # ---- 1) el historico del persistidor, SOLO LECTURA ----
+    prod = pd.read_csv(SERIE_PROD, encoding="utf-8-sig")
+    prod["dia"] = prod["dia"].astype(str).str[:10]
+    prod = prod[["dia", "raw"]]
+    log("historico del persistidor (solo lectura): %d dias, hasta %s"
+        % (len(prod), prod["dia"].max()))
 
+    # ---- 2) los dias que ya teniamos del LIVE ----
+    if DIAS_LIVE.exists():
+        live = pd.read_csv(DIAS_LIVE, encoding="utf-8-sig")
+        live["dia"] = live["dia"].astype(str).str[:10]
+    else:
+        live = pd.DataFrame(columns=["dia", "raw", "n_celdas"])
+    log("dias propios del LIVE acumulados: %d" % len(live))
+
+    # ---- 3) los nuevos, con el filtro de celdas ----
+    conocidos = set(prod["dia"]) | set(live["dia"])
     ent = leer_entregas()
-    nuevos = {d: v for d, v in ent.items() if d not in conocidos}
-    log("entregas con dial: %d | dias NUEVOS: %d" % (len(ent), len(nuevos)))
+    nuevos, rechazados = [], []
+    for dia, (raw, nc) in sorted(ent.items()):
+        if dia in conocidos:
+            continue
+        if nc is not None and nc < MIN_CELDAS:
+            rechazados.append((dia, nc))
+            continue
+        if nc is None:
+            log("  nota: %s no trae THETA_DIAL_NCELDAS (entrega anterior al "
+                "2026-08-21); se acepta sin comprobar cobertura" % dia)
+        nuevos.append({"dia": dia, "raw": raw, "n_celdas": (nc if nc is not None else -1)})
+
+    log("entregas con dial: %d | dias NUEVOS aceptados: %d | rechazados: %d"
+        % (len(ent), len(nuevos), len(rechazados)))
+    for dia, nc in rechazados:
+        log("  RECHAZADO %s: solo %d celda(s), por debajo del minimo de %d. "
+            "Un dial con tan poca cobertura se desvia mas que el ancho de una "
+            "banda de estado, y ademas contaminaria los percentiles futuros."
+            % (dia, nc, MIN_CELDAS))
+    for r in nuevos:
+        log("  + %s  raw=%.6e  (%s celdas)"
+            % (r["dia"], r["raw"], r["n_celdas"] if r["n_celdas"] > 0 else "?"))
 
     if nuevos:
-        add = pd.DataFrame({"dia": sorted(nuevos), "raw": [nuevos[d] for d in sorted(nuevos)]})
-        s = pd.concat([s[["dia", "raw"]], add], ignore_index=True)
-        s = s.drop_duplicates(subset=["dia"], keep="first").sort_values("dia")
-        # escritura atomica: tmp + replace, nunca en sitio
-        tmp = SERIE.with_suffix(".csv.tmp")
-        s.to_csv(tmp, index=False, encoding="utf-8-sig")
-        tmp.replace(SERIE)
-        log("serie ampliada a %d dias (hasta %s)" % (len(s), s["dia"].iloc[-1]))
-        for d in sorted(nuevos):
-            log("   + %s  raw=%.6e" % (d, nuevos[d]))
+        live = pd.concat([live, pd.DataFrame(nuevos)], ignore_index=True)
+        live = live.drop_duplicates(subset=["dia"], keep="last").sort_values("dia")
+        DIAS_LIVE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = DIAS_LIVE.with_suffix(".csv.tmp")
+        live.to_csv(tmp, index=False, encoding="utf-8-sig")
+        tmp.replace(DIAS_LIVE)          # escritura atomica, y en NUESTRO fichero
+        log("dias_live.csv ampliado a %d dias" % len(live))
     else:
         log("sin dias nuevos: se republica lo que ya habia")
 
+    # ---- 4) publicar. La serie efectiva la compone update_dashboard ----
     data = full.build()
     if not nuevos:
         data["meta"]["sin_datos_nuevos"] = True
@@ -125,18 +196,14 @@ def main():
     log("latest: %s  percentil %.1f  %s  (hace %s dias)"
         % (L.get("d"), L.get("p", float("nan")), L.get("e"), L.get("edad_dias")))
 
-    # ---- publicar ----
+    # ---- 5) git ----
     if not (DIR / ".git").exists():
         log("AVISO: no hay repo git aqui todavia -> no se publica (solo local)")
         return 0
-    # `-u` (--update) versiona TODO fichero YA RASTREADO que haya cambiado, y
-    # solo esos: nunca arrastra ficheros nuevos ni basura suelta. Antes esto era
-    # una lista fija de dos rutas, y una edicion al propio update_dashboard.py
-    # se quedaba fuera del repo en silencio -- la publicacion dejaba de ser
-    # reproducible: el JSON de GitHub ya no salia del codigo de GitHub.
-    # Lo cazo la verificacion end-to-end del 2026-08-20.
+    # `-u` versiona lo YA RASTREADO que haya cambiado, y solo eso: nunca
+    # arrastra ficheros nuevos ni basura suelta.
     git("add", "-u")
-    git("add", "data/theta_dial_data.json")   # por si aun no estuviera rastreado
+    git("add", "data/theta_dial_data.json", "data/dias_live.csv")
     st = git("status", "--porcelain")
     if not st.stdout.strip():
         log("nada que commitear")

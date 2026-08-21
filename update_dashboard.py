@@ -58,6 +58,7 @@ ESTUDIO = (Path.home() / "Desktop" / "BULK OPTIONSTRAT" / "ESTRATEGIAS" / "Batma
            / "tabla_completa_theta_dial.json")
 OHLC = (Path.home() / "Desktop" / "BULK OPTIONSTRAT" / "ESTRATEGIAS" / "Batman"
         / "_GEN3_MULTIASSET" / "QQQ_VIX_DAILY_OHLC.parquet")
+DIAS_LIVE = DIR / "data" / "dias_live.csv"   # los dias que aporta el LIVE
 OUT = DIR / "data" / "theta_dial_data.json"
 
 MIN_HIST = 250          # el mismo que el persistidor
@@ -141,8 +142,30 @@ def build():
     bajo, alto = float(cortes["BAJO_hasta"]), float(cortes["ALTO_desde"])
     log("cortes de estado: BAJO < %.2f <= MEDIO < %.2f <= ALTO" % (bajo, alto))
 
-    s = pd.read_csv(SERIE, encoding="utf-8-sig")
+    # La serie efectiva son DOS fuentes, y el orden de precedencia importa:
+    #   1. GEN3_THETA_DIAL_SERIE_QQQ.csv -- el historico del persistidor. Se
+    #      abre SOLO LECTURA: es la referencia que el LIVE usa para rankear, y
+    #      un dashboard no tiene por que escribir ahi (arreglado 2026-08-21).
+    #   2. data/dias_live.csv -- los dias que daily_refresh ha ido sacando de
+    #      las entregas, que es lo unico que puede rellenar el tramo posterior
+    #      al corte del gate forward.
+    # Si un dia esta en las dos, MANDA el persistidor: su valor esta calculado
+    # sobre los candidatos que sobrevivieron al filtro forward, y el del LIVE es
+    # una aproximacion del dia en curso. Asi, cuando se amplia la madre, los
+    # dias aproximados se sustituyen solos por los buenos.
+    s = pd.read_csv(SERIE, encoding="utf-8-sig")[["dia", "raw"]]
     s["dia"] = s["dia"].astype(str).str[:10]
+    n_prod = len(s)
+    if DIAS_LIVE.exists():
+        lv = pd.read_csv(DIAS_LIVE, encoding="utf-8-sig")
+        lv["dia"] = lv["dia"].astype(str).str[:10]
+        lv = lv[~lv["dia"].isin(set(s["dia"]))][["dia", "raw"]]
+        if len(lv):
+            s = pd.concat([s, lv], ignore_index=True)
+        log("serie: %d dias del persistidor + %d del LIVE" % (n_prod, len(lv)))
+    else:
+        log("serie: %d dias del persistidor (aun no hay dias del LIVE)" % n_prod)
+    s = s.drop_duplicates(subset=["dia"], keep="first")
     s = s.sort_values("dia").reset_index(drop=True)
     raw = pd.to_numeric(s["raw"], errors="coerce").to_numpy(np.float64)
     pctl = pct_expanding(raw)
