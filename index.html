@@ -119,6 +119,7 @@ footer code{background:var(--surf);padding:1px 5px;border-radius:4px;color:var(-
   <h2><span>##</span> Serie</h2>
   <div class="h2sub">Percentil del dial con las bandas de estado. El precio de QQQ va de contexto, en el eje derecho.</div>
   <div class="pills" id="pills"></div>
+  <div id="particion" style="margin:2px 0 12px"></div>
   <div id="chart"></div>
 
   <h2><span>##</span> Monotonía por decil</h2>
@@ -189,10 +190,25 @@ function pintarGrafico(){
     dat = s.slice(-n);
   }
   const x=dat.map(r=>r.d);
+  // La serie va PARTIDA en dos trazas a proposito. Pintarla continua daba a
+  // entender que el tramo del LIVE es mas de lo mismo, y no lo es: a la
+  // izquierda esta el backtest donde se calibro todo, a la derecha lo que
+  // todavia no ha demostrado nada. Se separan con null en la frontera para que
+  // Plotly no una los extremos con una recta que cruzaria el hueco entero.
+  const esOOS = r => r.o === "OOS";
+  const yIS  = dat.map(r => esOOS(r) ? null : r.p);
+  const yOOS = dat.map(r => esOOS(r) ? r.p  : null);
+  const hayOOS = dat.some(esOOS);
   const trazas=[
-    {x, y:dat.map(r=>r.p), type:"scatter", mode:"lines", name:"THETA_DIAL (percentil)",
-     line:{color:"#c4b5fd",width:1.8}, hovertemplate:"%{x}<br>dial %{y:.1f}<extra></extra>"},
+    {x, y:yIS, type:"scatter", mode:"lines", name:"IS \u00b7 backtest",
+     line:{color:"#c4b5fd",width:1.8}, connectgaps:false,
+     hovertemplate:"%{x}<br>dial %{y:.1f}<br><i>dentro de muestra</i><extra></extra>"},
   ];
+  if(hayOOS){
+    trazas.push({x, y:yOOS, type:"scatter", mode:"lines+markers", name:"OOS \u00b7 LIVE",
+      line:{color:"#2bd48a",width:2.4}, marker:{size:6,color:"#2bd48a"}, connectgaps:false,
+      hovertemplate:"%{x}<br>dial %{y:.1f}<br><i>fuera de muestra</i><extra></extra>"});
+  }
   if(dat.some(r=>r.q!==null)){
     trazas.push({x, y:dat.map(r=>r.q), type:"scatter", mode:"lines", name:"QQQ (contexto)",
       yaxis:"y2", line:{color:"#5f6877",width:1,dash:"dot"},
@@ -208,11 +224,46 @@ function pintarGrafico(){
     yaxis:{title:"percentil",range:[0,100],gridcolor:"#232a36",zeroline:false},
     yaxis2:{title:"QQQ",overlaying:"y",side:"right",showgrid:false,zeroline:false},
     shapes:[
+      // el hueco sin dato: sombreado y etiquetado, porque es la FRONTERA y no un fallo
+      ...((D.particion && D.particion.hueco) ? [{
+        type:"rect", xref:"x", yref:"paper",
+        x0:D.particion.hueco[0], x1:D.particion.hueco[1], y0:0, y1:1,
+        fillcolor:"rgba(95,104,119,.30)", line:{width:0}, layer:"below"
+      }] : []),
       {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:0,y1:B,fillcolor:"rgba(255,115,105,.09)",line:{width:0},layer:"below"},
       {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:B,y1:A,fillcolor:"rgba(237,161,0,.07)",line:{width:0},layer:"below"},
       {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:A,y1:100,fillcolor:"rgba(43,212,138,.08)",line:{width:0},layer:"below"}
-    ]
+    ],
+    annotations: ((D.particion && D.particion.hueco && VENTANA==="all") ? [{
+      xref:"x", yref:"paper", x:D.particion.hueco[0], y:1.02,
+      xanchor:"left", showarrow:false,
+      text:"sin dato ("+D.particion.hueco_dias+"d)",
+      font:{size:10, color:"#9aa3b2"}
+    }] : [])
   }, {displayModeBar:false,responsive:true});
+}
+
+// El chip de la particion. Deliberadamente SIN barra de progreso: los dias OOS
+// acumulan LECTURAS del dial, no veredictos, y una barra insinuaria que el tramo
+// ya dice algo. Para saber si un dia acerto hace falta su PnL a W50, que tarda
+// ~250 dias en existir; por eso se publica la fecha del primer veredicto
+// posible en vez de un porcentaje.
+function pintarParticion(){
+  const P=D.particion, el=document.getElementById("particion");
+  if(!P || !el) return;
+  const caja=(t,v,c)=>'<span style="display:inline-block;padding:3px 9px;margin-right:7px;'+
+    'border:1px solid #232a36;border-radius:4px;background:#11151c;font-size:11.5px">'+
+    '<span style="color:#5f6877">'+t+'</span> <b style="color:'+c+'">'+v+'</b></span>';
+  let h = caja("IS (backtest)", P.n_is+" días · hasta "+P.frontera, "#c4b5fd");
+  if(P.hueco) h += caja("sin dato", P.hueco_dias+" días", "#5f6877");
+  h += caja("OOS (LIVE)", P.n_oos+" día"+(P.n_oos===1?"":"s"),
+            P.n_oos>0 ? "#2bd48a" : "#5f6877");
+  if(P.evaluable){
+    h += '<div style="margin-top:7px;color:#5f6877;font-size:11px;line-height:1.55">'+
+         P.nota+' Primer veredicto posible: <b style="color:#9aa3b2">'+P.evaluable+
+         '</b>.</div>';
+  }
+  el.innerHTML = h;
 }
 
 // ---------------------------------------------------------------- graficos
@@ -348,7 +399,7 @@ fetch("data/theta_dial_data.json?v="+Date.now()).then(r=>r.json()).then(d=>{
     document.querySelectorAll(".pill").forEach(e=>e.classList.toggle("on",e.dataset.v===VENTANA));
     pintarGrafico();
   });
-  pintarHoy(); pintarGrafico(); pintarTablas(); pintarDeciles(); pintarCortes(); pintarCobertura(); pintarConcentracion();
+  pintarHoy(); pintarGrafico(); pintarTablas(); pintarParticion(); pintarDeciles(); pintarCortes(); pintarCobertura(); pintarConcentracion();
   document.getElementById("ft").innerHTML =
     `<b>Fórmula:</b> ${m.formula}. Bandas DTE1 <code>${m.bandas_dte1.join(", ")}</code> · ` +
     `DTE2 <code>${m.bandas_dte2.join(", ")}</code> · calentamiento <code>${m.min_hist_dias}</code> días.<br>` +

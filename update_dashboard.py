@@ -156,12 +156,14 @@ def build():
     s = pd.read_csv(SERIE, encoding="utf-8-sig")[["dia", "raw"]]
     s["dia"] = s["dia"].astype(str).str[:10]
     n_prod = len(s)
+    dias_oos = set()
     if DIAS_LIVE.exists():
         lv = pd.read_csv(DIAS_LIVE, encoding="utf-8-sig")
         lv["dia"] = lv["dia"].astype(str).str[:10]
         lv = lv[~lv["dia"].isin(set(s["dia"]))][["dia", "raw"]]
         if len(lv):
             s = pd.concat([s, lv], ignore_index=True)
+            dias_oos = set(lv["dia"])
         log("serie: %d dias del persistidor + %d del LIVE" % (n_prod, len(lv)))
     else:
         log("serie: %d dias del persistidor (aun no hay dias del LIVE)" % n_prod)
@@ -196,6 +198,10 @@ def build():
             "p": (round(float(pctl[i]), 2) if np.isfinite(pctl[i]) else None),
             "e": (est[i] if est[i] is not None else None),
             "q": (round(float(q), 2) if q is not None and np.isfinite(q) else None),
+            # "o" = origen. IS = backtest con gate forward (donde se calibro
+            # TODO lo que dice esta pagina). OOS = leido de la entrega del LIVE,
+            # dia a dia, sin que nadie lo hubiera visto antes.
+            "o": ("OOS" if d in dias_oos else "IS"),
         })
 
     ult = next((x for x in reversed(series) if x["p"] is not None), None)
@@ -205,6 +211,22 @@ def build():
         % (ult["d"], ult["p"], ult["e"], edad))
 
     est_full = json.loads(ESTUDIO.read_text(encoding="utf-8")) if ESTUDIO.exists() else {}
+
+    # --- la particion IS / OOS ---
+    frontera = max((x["d"] for x in series if x["o"] == "IS" and x["p"] is not None),
+                   default=None)
+    n_oos = sum(1 for x in series if x["o"] == "OOS" and x["p"] is not None)
+    hueco_dias = 0
+    evaluable = None
+    if dias_oos and frontera:
+        hueco_dias = (pd.Timestamp(min(dias_oos)) - pd.Timestamp(frontera)).days
+        # ~250 dias de calendario para que cierre el W50 del DTE1 mas largo del
+        # universo (500). Es una cota, no una promesa: los DTE cortos cierran antes.
+        evaluable = (pd.Timestamp(min(dias_oos)) +
+                     pd.Timedelta(days=250)).strftime("%Y-%m-%d")
+    log("particion: IS %d dias (hasta %s) | hueco %d dias | OOS %d dias"
+        % (sum(1 for x in series if x["o"] == "IS" and x["p"] is not None),
+           frontera, hueco_dias, n_oos))
 
     data = {
         "meta": {
@@ -232,6 +254,30 @@ def build():
         #                   latest.date y latest.pct, y si `zone` no esta en su
         #                   ZONE_COLORS no pinta nada, en silencio).
         # Duplicar tres escalares es mas barato que mantener dos formatos.
+        # La particion IS / OOS. El hueco entre las dos (el tramo que no tiene ni
+        # backtest ni entrega) no es un defecto que tapar: es la frontera mas
+        # limpia que se puede pedir, sin solape ni zona gris.
+        #
+        # OJO CON LO QUE SIGNIFICA EL CONTADOR: los dias OOS acumulan LECTURAS
+        # del dial, no VEREDICTOS. Para saber si el dial acerto en un dia hace
+        # falta su PnL a W50, y ese no existe hasta ~250 dias despues. Por eso
+        # se publica la fecha a partir de la cual el tramo empieza a ser
+        # evaluable, en vez de una barra de progreso que insinuaria que ya dice
+        # algo.
+        "particion": {
+            "frontera": frontera,
+            "n_is": int(sum(1 for x in series if x["o"] == "IS" and x["p"] is not None)),
+            "n_oos": int(n_oos),
+            "primer_oos": (min(dias_oos) if dias_oos else None),
+            "hueco": ([frontera, min(dias_oos)] if dias_oos else None),
+            "hueco_dias": (int(hueco_dias) if dias_oos else 0),
+            "evaluable_desde": evaluable,
+            "nota": ("El tramo OOS acumula LECTURAS del dial, no todav%sa "
+                     "veredictos: para saber si un d%sa acert%s hace falta su PnL "
+                     "a W50, que no existe hasta ~250 d%sas despu%ss. Lo que se "
+                     "ve aqu%s es el registro en vivo; la evaluaci%sn llega "
+                     "sola." % (I_, I_, O, I_, E, I_, O)),
+        },
         "latest": (dict(ult, edad_dias=edad,
                         date=ult["d"], pct=ult["p"], zone=ult["e"]) if ult else None),
         "series": series,
