@@ -207,6 +207,19 @@ function pintarGrafico(){
   const yRECUP = dat.map(r => r.o === "RECUP" ? r.p : null);
   const hayOOS = dat.some(esPost);
   const hayRec = dat.some(r => r.o === "RECUP");
+
+  // SOLAPE DE UN PUNTO. Sin esto las dos trazas quedan sueltas: la de IS
+  // termina el 21-ago y la de OOS empieza el 24, y entre medias no hay ningun
+  // segmento que dibujar -- se ve un corte que parece un fallo. Peor aun con un
+  // solo dia de OOS, porque una linea de un punto no existe.
+  // Se repite el ULTIMO punto de IS como primero de OOS: no se inventa un dato,
+  // se pinta dos veces el mismo. La linea une y los colores siguen distinguiendo
+  // de donde viene cada tramo.
+  const iUltIS = (() => { for (let i = dat.length - 1; i >= 0; i--)
+                            if (!esPost(dat[i]) && dat[i].p !== null) return i;
+                          return -1; })();
+  const iPriOOS = dat.findIndex(r => r.o === "OOS" && r.p !== null);
+  if (iUltIS >= 0 && iPriOOS > iUltIS) yOOS[iUltIS] = dat[iUltIS].p;
   const trazas=[
     {x, y:yIS, type:"scatter", mode:"lines", name:"IS \u00b7 backtest",
      line:{color:"#c4b5fd",width:1.8}, connectgaps:false,
