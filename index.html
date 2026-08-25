@@ -195,10 +195,18 @@ function pintarGrafico(){
   // izquierda esta el backtest donde se calibro todo, a la derecha lo que
   // todavia no ha demostrado nada. Se separan con null en la frontera para que
   // Plotly no una los extremos con una recta que cruzaria el hueco entero.
-  const esOOS = r => r.o === "OOS";
-  const yIS  = dat.map(r => esOOS(r) ? null : r.p);
-  const yOOS = dat.map(r => esOOS(r) ? r.p  : null);
-  const hayOOS = dat.some(esOOS);
+  // TRES origenes, no dos. Un dia RECUPERADO se recalculo con el backtester
+  // ADHOC (entra 10:30 ET) porque el LIVE (12:30 ET) no llego a correr ese dia.
+  // Medido sobre el 2026-08-20, que tenemos por las DOS vias: 4,17 puntos de
+  // percentil de diferencia = el 34% del ancho de una banda de estado. O sea
+  // que un recuperado PUEDE caer en otro estado. Por eso va en otro color y
+  // solo como marcador, sin linea: no es lo mismo y no debe parecerlo.
+  const esPost = r => r.o === "OOS" || r.o === "RECUP";
+  const yIS    = dat.map(r => esPost(r) ? null : r.p);
+  const yOOS   = dat.map(r => r.o === "OOS"   ? r.p : null);
+  const yRECUP = dat.map(r => r.o === "RECUP" ? r.p : null);
+  const hayOOS = dat.some(esPost);
+  const hayRec = dat.some(r => r.o === "RECUP");
   const trazas=[
     {x, y:yIS, type:"scatter", mode:"lines", name:"IS \u00b7 backtest",
      line:{color:"#c4b5fd",width:1.8}, connectgaps:false,
@@ -207,7 +215,13 @@ function pintarGrafico(){
   if(hayOOS){
     trazas.push({x, y:yOOS, type:"scatter", mode:"lines+markers", name:"OOS \u00b7 LIVE",
       line:{color:"#2bd48a",width:2.4}, marker:{size:6,color:"#2bd48a"}, connectgaps:false,
-      hovertemplate:"%{x}<br>dial %{y:.1f}<br><i>fuera de muestra</i><extra></extra>"});
+      hovertemplate:"%{x}<br>dial %{y:.1f}<br><i>fuera de muestra · LIVE</i><extra></extra>"});
+  }
+  if(hayRec){
+    trazas.push({x, y:yRECUP, type:"scatter", mode:"markers", name:"OOS · recuperado",
+      marker:{size:9,color:"#eda100",symbol:"diamond-open",line:{width:2}},
+      hovertemplate:"%{x}<br>dial %{y:.1f}<br><i>recuperado con el backtester"+
+                    "<br>(~4 puntos de percentil de margen)</i><extra></extra>"});
   }
   if(dat.some(r=>r.q!==null)){
     trazas.push({x, y:dat.map(r=>r.q), type:"scatter", mode:"lines", name:"QQQ (contexto)",
@@ -262,8 +276,10 @@ function pintarParticion(){
     '<span style="color:#5f6877">'+t+'</span> <b style="color:'+c+'">'+v+'</b></span>';
   let h = caja("IS (backtest)", P.n_is+" días · hasta "+P.frontera, "#c4b5fd");
   if(P.hueco) h += caja("sin dato", P.hueco_dias+" días", "#5f6877");
-  h += caja("OOS (LIVE)", P.n_oos+" día"+(P.n_oos===1?"":"s"),
-            P.n_oos>0 ? "#2bd48a" : "#5f6877");
+  const nRec = P.n_recup || 0, nLive = (P.n_oos || 0) - nRec;
+  h += caja("OOS (LIVE)", nLive+" día"+(nLive===1?"":"s"),
+            nLive>0 ? "#2bd48a" : "#5f6877");
+  if(nRec) h += caja("recuperados", nRec+" día"+(nRec===1?"":"s"), "#eda100");
   if(P.evaluable){
     h += '<div style="margin-top:7px;color:#5f6877;font-size:11px;line-height:1.55">'+
          P.nota+' Primer veredicto posible: <b style="color:#9aa3b2">'+P.evaluable+
