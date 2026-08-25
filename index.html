@@ -234,7 +234,13 @@ function pintarGrafico(){
       {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:B,y1:A,fillcolor:"rgba(237,161,0,.07)",line:{width:0},layer:"below"},
       {type:"rect",xref:"paper",x0:0,x1:1,yref:"y",y0:A,y1:100,fillcolor:"rgba(43,212,138,.08)",line:{width:0},layer:"below"}
     ],
-    annotations: ((D.particion && D.particion.hueco && VENTANA==="all") ? [{
+    // La etiqueta acompana SIEMPRE a la banda gris, no solo en la vista "all".
+    // Antes iba condicionada a VENTANA==="all" y al cambiar a 1y/3y quedaba una
+    // franja gris sin explicacion, que parece un fallo de pintado y no lo es.
+    // Ahora la condicion es la MISMA que la de la banda: que el hueco caiga
+    // dentro del tramo dibujado.
+    annotations: ((D.particion && D.particion.hueco &&
+                   dat.length && dat[0].d <= D.particion.hueco[1]) ? [{
       xref:"x", yref:"paper", x:D.particion.hueco[0], y:1.02,
       xanchor:"left", showarrow:false,
       text:"sin dato ("+D.particion.hueco_dias+"d)",
