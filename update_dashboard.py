@@ -49,6 +49,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from procedencia import procedencia   # bloque de trazabilidad del JSON
+
 DIR = Path(__file__).resolve().parent
 GEN3 = Path.home() / "Desktop" / "BATMAN_QQQ_GEN3_V42_BACKTEST_OUTPUT_FILES"
 SERIE = GEN3 / "GEN3_THETA_DIAL_SERIE_QQQ.csv"
@@ -251,6 +253,8 @@ def build():
     # --- la particion IS / OOS ---
     frontera = max((x["d"] for x in series if x["o"] == "IS" and x["p"] is not None),
                    default=None)
+    n_bt = sum(1 for x in series
+               if x["o"] == "IS" and x["p"] is not None)
     # OOS = los que vienen del LIVE + los recuperados: los dos son fuera de
     # muestra (ninguno vio el futuro). Se cuentan juntos para la frontera y
     # aparte para pintarlos distinto.
@@ -304,6 +308,9 @@ def build():
         # se publica la fecha a partir de la cual el tramo empieza a ser
         # evaluable, en vez de una barra de progreso que insinuaria que ya dice
         # algo.
+        # De donde sale cada cifra de esta pagina, con rutas absolutas,
+        # para que se pueda peritar sin entrar en el repo. Ver procedencia.py.
+        "procedencia": procedencia(frontera, n_bt, n_oos),
         "particion": {
             "frontera": frontera,
             "n_is": int(sum(1 for x in series if x["o"] == "IS" and x["p"] is not None)),

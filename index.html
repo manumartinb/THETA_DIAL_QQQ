@@ -144,6 +144,13 @@ footer code{background:var(--surf);padding:1px 5px;border-radius:4px;color:var(-
   <div class="h2sub">Lo que los datos sostienen, y lo que no.</div>
   <div class="warns" id="warns"></div>
 
+  <h2><span>##</span> Procedencia y peritaje</h2>
+  <p class="sub">De dónde sale cada cifra de esta página, con rutas absolutas.
+     Pensado para que alguien con acceso al disco pueda rehacer los números
+     <b>sin entrar en este repositorio</b>. Todo esto viaja también dentro de
+     <code>data/theta_dial_data.json</code>, en la clave <code>procedencia</code>.</p>
+  <div id="proc"></div>
+
   <footer>
     <div id="ft"></div>
   </footer>
@@ -385,6 +392,59 @@ function pintarConcentracion(){
   if(s) s.innerHTML = c.nota || "";
 }
 
+// La seccion de procedencia. Se pinta desde el JSON en vez de escribirla a mano
+// en el HTML para que no pueda quedarse desfasada respecto a los datos: si
+// manana cambia una ruta o una constante, cambia en procedencia.py y aqui sale
+// sola. Documentacion que se copia a mano es documentacion que miente.
+function pintarProcedencia(){
+  const P = D.procedencia, el = document.getElementById("proc");
+  if(!P || !el) return;
+  const mono = 'font-family:var(--mono);font-size:11.5px;color:#9aa3b2;word-break:break-all';
+  const cab = t => '<div style="color:#c4b5fd;font-weight:600;margin:16px 0 6px;'+
+                   'font-size:12.5px;letter-spacing:.03em">'+t+'</div>';
+  const caja = c => '<div style="background:#11151c;border:1px solid #232a36;'+
+                    'border-radius:5px;padding:11px 13px;margin-bottom:8px">'+c+'</div>';
+  let h = caja('<div style="font-size:12.5px;line-height:1.65">'+P.que_es+'</div>');
+
+  h += cab("La fórmula, paso a paso");
+  h += caja(Object.entries(P.formula)
+        .filter(([k])=>/^\d/.test(k))
+        .map(([k,v])=>'<div style="'+mono+';margin:3px 0">'+
+             '<span style="color:#5f6877">'+k.replace(/^\d_/,'')+'</span> &nbsp; '+v+'</div>').join("")
+      + '<div style="margin-top:10px;font-size:11.5px;color:#5f6877;line-height:1.6">'+
+        P.formula.por_que_media_de_medias+'</div>'
+      + '<div style="margin-top:8px;font-size:11.5px;color:#5f6877;line-height:1.6">'+
+        P.formula.cuantos_theta_k2+'</div>');
+
+  h += cab("Constantes");
+  h += caja('<div style="'+mono+'">'+Object.entries(P.constantes)
+        .map(([k,v])=>k+' = '+(Array.isArray(v)?'['+v.join(", ")+']':v)).join("<br>")+'</div>');
+
+  h += cab("Ficheros (rutas absolutas)");
+  h += Object.entries(P.ficheros).map(([k,f]) => caja(
+        '<div style="color:#cfd6e4;font-size:12px;font-weight:600">'+k+'</div>'+
+        '<div style="'+mono+';margin:4px 0">'+f.ruta+'</div>'+
+        '<div style="font-size:11.5px;color:#5f6877;line-height:1.6">'+f.que_es+
+        (f.dos_trampas?'<br><b style="color:#eda100">Ojo:</b> '+f.dos_trampas:'')+
+        (f.nota?'<br>'+f.nota:'')+
+        (f.la_escribe?'<br><span style="'+mono+'">lo escribe: '+f.la_escribe+'</span>':'')+
+        (f.columnas_del_dial?'<br><span style="'+mono+'">columnas: '+f.columnas_del_dial.join(", ")+'</span>':'')+
+        '</div>')).join("");
+
+  h += cab("Scripts");
+  h += caja('<div style="'+mono+'">'+Object.entries(P.scripts)
+        .map(([k,v])=>'<span style="color:#5f6877">'+k+'</span> &nbsp; '+v).join("<br>")+'</div>');
+
+  h += cab("Cómo reproducir un día");
+  h += caja('<div style="'+mono+';line-height:1.9">'+P.como_reproducir_un_dia.join("<br>")+'</div>');
+
+  h += cab("Límites declarados");
+  h += caja('<ul style="margin:0;padding-left:18px;font-size:11.5px;color:#9aa3b2;line-height:1.7">'+
+        P.limites_declarados.map(x=>'<li style="margin:6px 0">'+x+'</li>').join("")+'</ul>');
+
+  el.innerHTML = h;
+}
+
 function pintarTablas(){
   tabla("t-dec",[
     {t:"decil",k:"corte"},{t:"N",f:f=>I(f.N)},{t:"días",f:f=>I(f.Ndias)},
@@ -434,7 +494,7 @@ fetch("data/theta_dial_data.json?v="+Date.now()).then(r=>r.json()).then(d=>{
     document.querySelectorAll(".pill").forEach(e=>e.classList.toggle("on",e.dataset.v===VENTANA));
     pintarGrafico();
   });
-  pintarHoy(); pintarGrafico(); pintarTablas(); pintarParticion(); pintarDeciles(); pintarCortes(); pintarCobertura(); pintarConcentracion();
+  pintarHoy(); pintarGrafico(); pintarTablas(); pintarParticion(); pintarProcedencia(); pintarDeciles(); pintarCortes(); pintarCobertura(); pintarConcentracion();
   document.getElementById("ft").innerHTML =
     `<b>Fórmula:</b> ${m.formula}. Bandas DTE1 <code>${m.bandas_dte1.join(", ")}</code> · ` +
     `DTE2 <code>${m.bandas_dte2.join(", ")}</code> · calentamiento <code>${m.min_hist_dias}</code> días.<br>` +
