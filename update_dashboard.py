@@ -58,7 +58,8 @@ ESTUDIO = (Path.home() / "Desktop" / "BULK OPTIONSTRAT" / "ESTRATEGIAS" / "Batma
            / "tabla_completa_theta_dial.json")
 OHLC = (Path.home() / "Desktop" / "BULK OPTIONSTRAT" / "ESTRATEGIAS" / "Batman"
         / "_GEN3_MULTIASSET" / "QQQ_VIX_DAILY_OHLC.parquet")
-DIAS_LIVE = DIR / "data" / "dias_live.csv"   # los dias que aporta el LIVE
+DIAS_LIVE = DIR / "data" / "dias_live.csv"      # dias del LIVE  -> OOS
+DIAS_BT   = DIR / "data" / "dias_backtest.csv"  # dias del ADHOC -> IS
 OUT = DIR / "data" / "theta_dial_data.json"
 
 MIN_HIST = 250          # el mismo que el persistidor
@@ -156,12 +157,34 @@ def build():
     s = pd.read_csv(SERIE, encoding="utf-8-sig")[["dia", "raw"]]
     s["dia"] = s["dia"].astype(str).str[:10]
     n_prod = len(s)
+    # === SERIE HOMOGENEA (decision del 2026-08-25) ===
+    # Antes convivian TRES construcciones: el persistidor, el LIVE (otra hora y
+    # otra poblacion de candidatos) y los dias recuperados. Separadas 4,17
+    # puntos de percentil entre si -- medido. Un percentil expanding sobre esa
+    # mezcla no significa nada limpio: cada dia se rankea contra un pasado que
+    # no se construyo como el.
+    #
+    # Ahora: `dias_backtest.csv` continua la serie del persistidor con EL MISMO
+    # motor (backtester ADHOC) y LA MISMA hora (10:30 ET). Todo eso es IS.
+    # OOS empieza de cero con el LIVE, y la frontera queda nitida.
     dias_oos, dias_recup = set(), set()
+    FRONTERA = json.loads((DIR / "data" / "frontera.json")
+                          .read_text(encoding="utf-8"))["frontera_is_oos"]
+    if DIAS_BT.exists():
+        bt = pd.read_csv(DIAS_BT, encoding="utf-8-sig")
+        bt["dia"] = bt["dia"].astype(str).str[:10]
+        # tope duro: nada posterior a la frontera puede entrar como IS
+        bt = bt[(bt["dia"] <= FRONTERA) & (~bt["dia"].isin(set(s["dia"])))][["dia", "raw"]]
+        if len(bt):
+            s = pd.concat([s, bt], ignore_index=True)
+            log("serie: +%d dias del backtester ADHOC (IS, mismo motor)" % len(bt))
     if DIAS_LIVE.exists():
         lv = pd.read_csv(DIAS_LIVE, encoding="utf-8-sig")
         lv["dia"] = lv["dia"].astype(str).str[:10]
         if "origen" not in lv.columns:
             lv["origen"] = "LIVE"
+        # Un dia que ya esta en IS (persistidor o ADHOC) NO se sobreescribe con
+        # el del LIVE: la homogeneidad manda sobre la frescura.
         lv = lv[~lv["dia"].isin(set(s["dia"]))]
         if len(lv):
             s = pd.concat([s, lv[["dia", "raw"]]], ignore_index=True)
@@ -288,8 +311,13 @@ def build():
             "n_recup": int(sum(1 for x in series
                                if x["o"] == "RECUP" and x["p"] is not None)),
             "primer_oos": (min(_post) if _post else None),
-            "hueco": ([frontera, min(_post)] if _post else None),
-            "hueco_dias": (int(hueco_dias) if _post else 0),
+            # Un fin de semana NO es un hueco. Solo se declara (y se pinta la
+            # banda gris) si hay mas de 5 dias naturales sin dato, que es lo
+            # unico que no explica el calendario. Antes eran 131 dias y tenia
+            # todo el sentido; desde la reconstruccion homogenea del 2026-08-25
+            # lo normal es que no haya ninguno.
+            "hueco": ([frontera, min(_post)] if (_post and hueco_dias > 5) else None),
+            "hueco_dias": (int(hueco_dias) if (_post and hueco_dias > 5) else 0),
             "evaluable_desde": evaluable,
             "nota": ("El tramo OOS acumula LECTURAS del dial, no todav%sa "
                      "veredictos: para saber si un d%sa acert%s hace falta su PnL "

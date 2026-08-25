@@ -1,0 +1,7 @@
+{
+  "frontera_is_oos": "2026-08-21",
+  "declarada": "2026-08-25",
+  "por_que": "Todo lo del dia de la frontera hacia atras se calcula con el BACKTESTER (motor Gen 3, entrada 10:30 ET): los 1.799 dias del persistidor mas los 92 que reconstruyo el ADHOC para cerrar el hueco. Un solo motor, una sola hora, un solo criterio de candidatos. Todo lo posterior viene del LIVE y es OOS de verdad.",
+  "regla": "Esta fecha NO se mueve. Si se moviera hacia delante, dias que ya son OOS pasarian a IS y el tramo fuera de muestra se iria vaciando solo, que es justo la forma mas silenciosa de enganarse. El reconstructor nunca calcula por encima de ella y el dashboard nunca marca IS un dia posterior.",
+  "antes_habia": "Tres construcciones mezcladas -- persistidor, LIVE (12:30 ET, otra poblacion de candidatos) y dias recuperados -- separadas 4,17 puntos de percentil entre si. Un percentil expanding sobre esa mezcla rankea cada dia contra un pasado que no se construyo como el."
+}
