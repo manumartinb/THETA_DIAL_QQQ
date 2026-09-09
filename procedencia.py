@@ -63,7 +63,9 @@ def procedencia(frontera, n_backtest, n_vivo):
             "bandas_dte2": BANDAS_DTE2,
             "min_hist_dias": MIN_HIST,
             "min_celdas_para_aceptar_un_dia": MIN_CELDAS,
-            "cortes_estado": "en GEN3_THETA_DIAL_REF_QQQ.json -> cortes_estado",
+            "cortes_estado": ("en GEN3_THETA_DIAL_MANIFEST_QQQ.json -> umbrales "
+                              "(sellado 2026-09-09; el REF json viejo queda vivo "
+                              "solo como archivo historico, ya no se escribe)"),
         },
 
         "ficheros": {
@@ -80,14 +82,32 @@ def procedencia(frontera, n_backtest, n_vivo):
             },
             "serie_historica": {
                 "ruta": _GEN3 + r"\GEN3_THETA_DIAL_SERIE_QQQ.csv",
-                "que_es": "dia,raw -- la serie que el persistidor emite desde la madre.",
+                "que_es": ("dia,raw -- la serie que el persistidor emite desde la "
+                           "madre. Input del SELLADOR (no del LIVE directamente "
+                           "desde 2026-09-09, ver vara_sellada abajo)."),
                 "la_escribe": _EST + r"\Batman\_GEN3_MULTIASSET\persist_gen3_theta_dial_symbol.py",
-                "nota": ("SOLO LECTURA para el dashboard. Es tambien la "
-                         "referencia que el LIVE usa para rankear el dial del dia."),
+                "nota": "SOLO LECTURA para el dashboard y para el sellador.",
             },
-            "referencia_cortes": {
+            "vara_sellada": {
+                "ruta": _GEN3 + r"\GEN3_THETA_DIAL_VARA_QQQ.npy",
+                "que_es": ("array ordenado, persistidor(1799) + backtester ADHOC "
+                           "(<=frontera, mismo motor). Vara UNICA que consultan "
+                           "LIVE y dashboard desde 2026-09-09 (antes cada uno "
+                           "tenia su propia poblacion y podian discrepar en "
+                           "ESTADO -- medido 5 de 101 dias OOS)."),
+                "la_escribe": (_EST + r"\Batman\QQQ\ANALISIS\SECUENCIA_THETA_DIAL_QQQ"
+                              r"\01_sellar_vara_theta_dial_qqq.py"),
+                "manifiesto": _GEN3 + r"\GEN3_THETA_DIAL_MANIFEST_QQQ.json",
+                "hash_check": ("R.3 de SECUENCIA_CANONICA.md: el LIVE calcula el "
+                               "sha256 de la vara al arrancar y lo compara con el "
+                               "declarado en el manifiesto. No casa -> aborta."),
+            },
+            "referencia_cortes_historica": {
                 "ruta": _GEN3 + r"\GEN3_THETA_DIAL_REF_QQQ.json",
-                "que_es": "bandas de DTE y cortes de estado (P33/P67 de la distribucion del dial).",
+                "que_es": ("bandas de DTE y cortes de estado -- fichero PRE-sellado "
+                           "(hasta 2026-09-09). Se conserva como historico; ya no "
+                           "lo escribe ni lo lee ningun script en produccion. "
+                           "Cortes vigentes en vara_sellada -> manifiesto."),
             },
             "parquets_por_dia": {
                 "ruta": _DESK + r"\BATMAN_QQQ_GEN3_V42_BACKTEST_OUTPUT_FILES_ADHOC",
@@ -139,8 +159,13 @@ def procedencia(frontera, n_backtest, n_vivo):
             "2. x = theta_k2 / SPX      (ojo: esa columna SPX es el precio de QQQ).",
             "3. b1 = pandas.cut(DTE1, bandas_dte1) ; b2 = pandas.cut(DTE2, bandas_dte2).",
             "4. Media de x por (b1,b2), y media de esas medias -> RAW del dia.",
-            "5. PCTL: contra los RAW de TODOS los dias ANTERIORES, "
-            "searchsorted(sorted(prev), raw, side='right') / len(prev) * 100.",
+            "5. PCTL, dos caminos segun la fecha (desde 2026-09-09): "
+            "(a) dia <= frontera (parte de la vara sellada): expanding "
+            "solo-pasado, contra los RAW de todos los dias anteriores DENTRO "
+            "de la vara. (b) dia > frontera (OOS, no matriculado en la vara): "
+            "searchsorted(vara_sellada_ordenada, raw, side='right') / "
+            "len(vara_sellada) * 100 -- la MISMA vara congelada que consulta "
+            "el LIVE, ver vara_sellada arriba.",
             "6. Comparar con el punto de 'series' que tenga esa fecha.",
         ],
 

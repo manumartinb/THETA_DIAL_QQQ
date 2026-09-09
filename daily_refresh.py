@@ -159,7 +159,8 @@ def main():
         if nc is None:
             log("  nota: %s no trae THETA_DIAL_NCELDAS (entrega anterior al "
                 "2026-08-21); se acepta sin comprobar cobertura" % dia)
-        nuevos.append({"dia": dia, "raw": raw, "n_celdas": (nc if nc is not None else -1)})
+        nuevos.append({"dia": dia, "raw": raw, "n_celdas": (nc if nc is not None else -1),
+                       "origen": "LIVE"})
 
     log("entregas con dial: %d | dias NUEVOS aceptados: %d | rechazados: %d"
         % (len(ent), len(nuevos), len(rechazados)))
