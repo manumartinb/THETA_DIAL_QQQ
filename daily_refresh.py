@@ -147,9 +147,25 @@ def main():
     log("dias propios del LIVE acumulados: %d" % len(live))
 
     # ---- 3) los nuevos, con el filtro de celdas ----
-    conocidos = set(prod["dia"]) | set(live["dia"])
+    # HOY es el UNICO dia que puede llegar por mas de una entrega real el mismo
+    # dia calendario (alta 2026-09-10: Batman QQQ V40 paso a auto_if_no_reply=
+    # True en el orquestador, asi que un run manual + el auto-lanzamiento de
+    # las 18:30 pueden coexistir). Los dias YA CERRADOS (persistidor, o LIVE de
+    # dias anteriores) no se vuelven a tocar -- por diseno, para no reprocesar
+    # el historico en cada refresco. HOY se actualiza siempre con la entrega
+    # MAS RECIENTE en disco, aunque ya hubiera una version de antes esta misma
+    # tarde: si no, el dashboard se queda pegado al PRIMER run del dia mientras
+    # la entrega real (la que lee la app) ya tiene datos mas frescos -- medido
+    # el 2026-09-10: dashboard en PCTL=13,7 (run de las 18:24) contra la
+    # entrega real en PCTL=13,96 (run de las 18:30), mismo dia.
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    congelados = set(prod["dia"])                       # persistidor: nunca se toca
+    cerrados_live = set(live["dia"]) - {hoy}             # LIVE de dias YA pasados
+    conocidos = congelados | cerrados_live
+    dias_live_actuales = set(live["dia"])
+
     ent = leer_entregas()
-    nuevos, rechazados = [], []
+    nuevos, actualizados, rechazados = [], [], []
     for dia, (raw, nc) in sorted(ent.items()):
         if dia in conocidos:
             continue
@@ -159,11 +175,15 @@ def main():
         if nc is None:
             log("  nota: %s no trae THETA_DIAL_NCELDAS (entrega anterior al "
                 "2026-08-21); se acepta sin comprobar cobertura" % dia)
-        nuevos.append({"dia": dia, "raw": raw, "n_celdas": (nc if nc is not None else -1),
-                       "origen": "LIVE"})
+        fila = {"dia": dia, "raw": raw, "n_celdas": (nc if nc is not None else -1),
+                "origen": "LIVE"}
+        if dia in dias_live_actuales:
+            actualizados.append(fila)
+        else:
+            nuevos.append(fila)
 
-    log("entregas con dial: %d | dias NUEVOS aceptados: %d | rechazados: %d"
-        % (len(ent), len(nuevos), len(rechazados)))
+    log("entregas con dial: %d | dias NUEVOS: %d | ACTUALIZADOS (hoy, re-run): %d | rechazados: %d"
+        % (len(ent), len(nuevos), len(actualizados), len(rechazados)))
     for dia, nc in rechazados:
         log("  RECHAZADO %s: solo %d celda(s), por debajo del minimo de %d. "
             "Un dial con tan poca cobertura se desvia mas que el ancho de una "
@@ -172,21 +192,29 @@ def main():
     for r in nuevos:
         log("  + %s  raw=%.6e  (%s celdas)"
             % (r["dia"], r["raw"], r["n_celdas"] if r["n_celdas"] > 0 else "?"))
+    for r in actualizados:
+        log("  ~ %s  raw=%.6e  (%s celdas)  <- HOY, sustituye la version anterior de esta misma tarde"
+            % (r["dia"], r["raw"], r["n_celdas"] if r["n_celdas"] > 0 else "?"))
 
-    if nuevos:
-        live = pd.concat([live, pd.DataFrame(nuevos)], ignore_index=True)
+    cambios = nuevos + actualizados
+    if cambios:
+        live = pd.concat([live, pd.DataFrame(cambios)], ignore_index=True)
+        # keep="last": la fila anadida ahora (mas fresca) gana sobre la que ya
+        # hubiera en `live` para el mismo dia -- asi es como "actualizados" se
+        # convierte en una sustitucion real, no en una fila duplicada.
         live = live.drop_duplicates(subset=["dia"], keep="last").sort_values("dia")
         DIAS_LIVE.parent.mkdir(parents=True, exist_ok=True)
         tmp = DIAS_LIVE.with_suffix(".csv.tmp")
         live.to_csv(tmp, index=False, encoding="utf-8-sig")
         tmp.replace(DIAS_LIVE)          # escritura atomica, y en NUESTRO fichero
-        log("dias_live.csv ampliado a %d dias" % len(live))
+        log("dias_live.csv: %d dias (%d nuevos, %d actualizados)"
+            % (len(live), len(nuevos), len(actualizados)))
     else:
-        log("sin dias nuevos: se republica lo que ya habia")
+        log("sin dias nuevos ni actualizaciones: se republica lo que ya habia")
 
     # ---- 4) publicar. La serie efectiva la compone update_dashboard ----
     data = full.build()
-    if not nuevos:
+    if not cambios:
         data["meta"]["sin_datos_nuevos"] = True
         data["meta"]["nota"] = ("No habia entrega con dia nuevo en este refresco. "
                                 "El grafico muestra el historico hasta la fecha de "
